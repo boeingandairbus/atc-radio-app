@@ -31,6 +31,7 @@ else:
 
 # Update the AI Prompt
 system_prompt = f"You are ATC at {icao_code}. {airport_context} Give taxi instructions using these taxiways."import streamlit as st
+import streamlit as st
 from openai import OpenAI
 import airportsdata
 
