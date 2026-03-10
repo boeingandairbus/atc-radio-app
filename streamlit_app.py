@@ -35,63 +35,63 @@ import streamlit as st
 from openai import OpenAI
 import airportsdata
 
-# 1. Setup & Data
-st.set_page_config(page_title="Aeroflot ATC", page_icon="✈️")
+st.set_page_config(page_title="ATC Radio", page_icon="✈️", layout="wide")
 airports = airportsdata.load('ICAO')
 
-# 2. Sidebar - Flight Configuration
+# UI Header
+st.title("🎙️ iPad ATC Terminal")
+st.write("Ensuring 'HTTPS' is active for microphone access.")
+
+# 1. SIDEBAR CONFIG
 with st.sidebar:
-    st.header("Flight Management")
+    st.header("Flight Settings")
     callsign = st.text_input("Callsign", "Aeroflot 123")
-    dep_icao = st.text_input("Departure Airport", "UUEE").upper()
-    arr_icao = st.text_input("Arrival Airport", "URSS").upper()
-    phase = st.radio("Current Phase", ["Clearance", "Taxi", "Takeoff", "Enroute", "Landing", "Arrival Taxi"])
+    icao = st.text_input("Airport ICAO", "UUEE").upper()
+    api_key = st.text_input("OpenAI Key", type="password")
+
+# 2. THE AUDIO WIDGET (iPad Specific Fix)
+# We use a key to ensure the widget resets properly after each use
+audio_data = st.audio_input("Hold to speak to Tower", key="ipad_mic")
+
+if audio_data is not None:
+    # DEBUG: Check if data actually arrived from the iPad
+    st.toast("Audio captured successfully!")
     
-    # API Key - You can put this in Streamlit Secrets later
-    api_key = st.text_input("OpenAI API Key (Optional for now)", type="password")
-
-st.title("🎙️ Virtual ATC Radio")
-st.caption(f"Connected to iPad Microphone | Controlling: {callsign}")
-
-# 3. The iPad Microphone Widget
-# This is the specific 2026 Streamlit component for iPad/Mobile mic support
-audio_value = st.audio_input("Tap to speak to Tower")
-
-if audio_value:
-    st.info("Transmission received... analyzing audio.")
-    
-    # Logic: Get airport names for the AI
-    dep_name = airports.get(dep_icao, {}).get('name', dep_icao)
-    arr_name = airports.get(arr_icao, {}).get('name', arr_icao)
-    current_apt = arr_name if "Arrival" in phase or "Landing" in phase else dep_name
-
-    # Check if we have a key to talk to the 'Brain'
     if api_key:
         client = OpenAI(api_key=api_key)
         
-        # A. Transcribe what you said (Ears)
+        # EAR: Transcribe using Whisper
+        # Note: We send the 'audio_data' directly as a file-like object
         transcript = client.audio.transcriptions.create(
             model="whisper-1", 
-            file=audio_value
+            file=audio_data
         )
         pilot_text = transcript.text
-        st.chat_message("user").write(pilot_text)
+        
+        with st.chat_message("user"):
+            st.write(f"**{callsign}:** {pilot_text}")
 
-        # B. Get ATC Response (Brain)
+        # BRAIN: Generate ATC response
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": f"You are ATC at {current_apt}. Use short aviation phraseology. Know the taxiways for {current_apt}."},
+                {"role": "system", "content": f"You are ATC at {icao}. Use strict aviation phraseology. Keep it short."},
                 {"role": "user", "content": pilot_text}
             ]
         )
         atc_reply = response.choices[0].message.content
-        st.chat_message("assistant").write(atc_reply)
         
+        with st.chat_message("assistant"):
+            st.write(f"**Tower:** {atc_reply}")
+            
+            # VOICE: iOS Playback Fix
+            # Safari requires specific formatting to play back audio reliably
+            audio_response = client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=atc_reply
+            )
+            # This allows the iPad to play the sound immediately
+            st.audio(audio_response.content, format="audio/mpeg")
     else:
-        # SIMULATION MODE (If no API key yet)
-        st.warning("Running in Offline/Simulation mode. Enter API key to hear real AI.")
-        if "Taxi" in phase:
-            st.success(f"ATC: {callsign}, {current_apt} Ground. Taxi to Runway 24L via Alpha, Bravo. Hold short Runway 20.")
-        elif "Landing" in phase:
-            st.success(f"ATC: {callsign}, {current_apt} Tower. Wind 240 at 10. Runway 06, cleared to land.")
+        st.warning("Please enter your OpenAI API Key in the sidebar to process audio.")
