@@ -30,4 +30,4 @@ else:
     airport_context = "Standard airport procedures apply."
 
 # Update the AI Prompt
-system_prompt = f"You are ATC at {icao_code}. {airport_context} Give taxi instructions using these taxiways."import streamlit as st
+system_prompt = f"You are ATC at {icao_code}. {airport_context} Give taxi instructions using these taxiways."
